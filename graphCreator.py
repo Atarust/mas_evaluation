@@ -1,39 +1,147 @@
 import matplotlib.pyplot as plt
 import pandas as pd
+
 import seaborn.apionly as sns
+import numpy as np
+from backcall._signatures import Parameter
 
 
-# Normal graph
-data = pd.read_csv("mas_taxi_delivery_data1_runtime10000000.csv.csv", index_col = False)
+def ultimateGraphCreator(filename, someParameters, someMetrics):
+    data = pd.read_csv(filename, index_col=False)
+    augmentTicksIdlePercent(data)
+    
+    parameters = findVariatingParameters(data, someParameters)
+    
+    if(parameters.__contains__('commRange')):
+        # it is a commRange graph!
+        for param in parameters:
+            for metric in someMetrics:
+                #drawNormalGraph(data, param, metric)
+                print("TODO functionality for commRange graphs")
+    elif(len(parameters) == 1):
+        # draw 2 line graph
+        for metric in someMetrics:
+            drawTwoLineGraph(data, parameters[0], metric)
+            plt.show()
+    elif(len(parameters) == 2):
+        # draw heatmap
+        for metric in someMetrics:
+            print(metric)
+            print(parameters)
+            drawHeatMap(data, parameters[0], parameters[1], metric)
+    else:
+        for param in parameters:
+            for metric in someMetrics:
+                drawTwoLineGraph(data, param, metric)
+                plt.show()
+    
 
-# if there are configurations with same parameters keeping only the mean
-data = data.groupby(['runTime', 'commRange', 'commReliability', 'numTaxis', 'numCustomers', 'newCustomerProb', 'seeRange', 'lazyProb'], as_index=False).mean()
+def findVariatingParameters(data, someParameters):
+    variatingParameters = []
+    for p in someParameters:
+        if (data[p].unique().size > 1):
+            variatingParameters.append(p)
+            
+    # special case: commRange is also being varied, more than just usual 2 values
+    if(len(data['commRange'].unique())>2):
+        variatingParameters.append('commRange')
+    
+    return variatingParameters
 
-data.plot(loglog=True, x='commRange', y='passengersDelivered')
-data.to_csv('test.csv')
-plt.show()
+def augmentTicksIdlePercent(data):
+    data['ticksIdlePercent'] = data['ticksTaxiSpentIdle'].div(data['ticks'])
 
-# Graph with two lines
-data = pd.read_csv("mas_taxi_delivery_data3_runtime10000000.csv.csv", index_col = False)
-ax = plt.gca()
+def drawNormalGraph(data, x, y='passengersDelivered'):
+    # if there are configurations with same parameters keeping only the mean
+    data = data.groupby(['runTime', 'commRange', 'commReliability', 'numTaxis', 'numCustomers', 'newCustomerProb', 'seeRange', 'lazyProb'], as_index=False).mean()
+    
+    ax = plt.gca()
+    data.plot(loglog=True, x=x, y=y, ax=ax)
+    plt.show()
 
-# if there are configurations with same parameters keeping only the mean
-data = data.groupby(['runTime', 'commRange', 'commReliability', 'numTaxis', 'numCustomers', 'newCustomerProb', 'seeRange', 'lazyProb'], as_index=False).mean()
 
-# plot two lines with and without communication
-data[data['commRange'] > 100].plot(loglog=True, x='seeRange', y='passengersDelivered', ax=ax)
-data[data['commRange'] <= 100].plot(loglog=True, x='seeRange', y='passengersDelivered', ax=ax)
-ax.legend(['data[\'commRange\'] > 100', 'data[\'commRange\'] <= 100'])
-plt.show()
+def drawTwoLineGraph(data, x, y='passengersDelivered'):
+    ax = plt.gca()
+    data[data['commRange'] > 100].plot.scatter(loglog=True, x=x, y=y, ax=ax, color='red')
+    data[data['commRange'] <= 100].plot.scatter(loglog=True, x=x, y=y, ax=ax, color='blue')
+    # if there are configurations with same parameters keeping only the mean
+    data = data.groupby(['runTime', 'commRange', 'commReliability', 'numTaxis', 'numCustomers', 'newCustomerProb', 'seeRange', 'lazyProb'], as_index=False).mean()
+    
+    # with and without communication
+    data[data['commRange'] > 100].plot(loglog=True, x=x, y=y, ax=ax, color='red')
+    data[data['commRange'] <= 100].plot(loglog=True, x=x, y=y, ax=ax, color='blue')
+    ax.legend(['data[\'commRange\'] > 100', 'data[\'commRange\'] <= 100'])
 
-# Heatmap
-data = pd.read_csv("mas_taxi_delivery_data3_runtime10000000.csv.csv", index_col = False)
 
-# if there are configurations with same parameters keeping only the mean
-data = data.groupby(['runTime', 'commRange', 'commReliability', 'numTaxis', 'numCustomers', 'newCustomerProb', 'seeRange', 'lazyProb'], as_index=False).mean()
+def drawHeatMap(data, x, y, z='passengersDelivered'):
+    # if there are configurations with same parameters keeping only the mean
+    data = data.groupby(['runTime', 'commRange', 'commReliability', 'numTaxis', 'numCustomers', 'newCustomerProb', 'seeRange', 'lazyProb'], as_index=False).mean()
+    piv = pd.pivot_table(data, values=z, index=[x], columns=[y], fill_value=0)
+    ax = sns.heatmap(piv, square=True)
+    plt.setp(ax.xaxis.get_majorticklabels(), rotation=90)
+    plt.tight_layout()
+    plt.show()
 
-piv = pd.pivot_table(data, values="passengersDelivered",index=["commRange"], columns=["seeRange"], fill_value=0)
-ax = sns.heatmap(piv, square=True)
-plt.setp( ax.xaxis.get_majorticklabels(), rotation=90 )
-plt.tight_layout()
-plt.show()
+def plotCommImprove(data, x, y, z='passengersDelivered'):
+    #data = data.groupby(['runTime', 'commRange', 'commReliability', 'numTaxis', 'numCustomers', 'newCustomerProb', 'seeRange', 'lazyProb'], as_index=False).mean()
+    
+    dataComm = data[data['commRange'] > 100]
+    dataNoComm = data[data['commRange'] <= 100]
+    
+    xValues = data[x].unique()
+    yValues = data[y].unique()
+    
+    xs = []
+    ys = []
+    diffs = []
+    
+    for xValue in xValues:
+        for yValue in yValues:
+            
+            # filter to only get rows with the specific x and y value. This should be only one row. Get from that row the value z.
+            zComm = dataComm[(dataComm[x] == xValue) & (dataComm[y] == yValue)][z].values[0]
+            zNoComm = dataNoComm[(dataNoComm[x] == xValue) & (dataNoComm[y] == yValue)][z].values[0]
+            
+            xs.append(xValue)
+            ys.append(yValue)
+            diffs.append(zComm - zNoComm) 
+    
+    newDataComm = pd.DataFrame.from_dict(data={x: xs, y: ys, 'commImprove':diffs})
+    piv = pd.pivot_table(newDataComm, values='commImprove', index=[x], columns=[y], fill_value=0)
+    ax = sns.heatmap(piv, square=True)
+    plt.setp(ax.xaxis.get_majorticklabels(), rotation=90)
+    plt.tight_layout()
+    plt.show()
+
+someParameters = ['runTime', 'commReliability', 'numTaxis', 'numCustomers', 'newCustomerProb', 'seeRange', 'lazyProb']
+someMetrics = ['passengersDelivered', 'ticksTaxiSpentIdle', 'ticksBetweenSeenAndPickedAverage', 'ticksIdlePercent']
+
+filename = "mas_taxi_delivery_data16_runtime10000000_trials40.csv"
+ultimateGraphCreator(filename, someParameters, someMetrics)
+
+filename = "mas_taxi_delivery_data2_runtime10000000_trials10.csv"
+ultimateGraphCreator(filename, someParameters, someMetrics)
+
+filename = "mas_taxi_delivery_data3_runtime10000000_trials5.csv"
+ultimateGraphCreator(filename, someParameters, someMetrics)
+
+
+#data = pd.read_csv("mas_taxi_delivery_data2_runtime10000000_trials10.csv", index_col=False)
+#augmentTicksIdlePercent(data)
+#for m in someMetrics:
+#    drawTwoLineGraph(data, 'seeRange', m)
+#    plt.show()
+
+#data = pd.read_csv("mas_taxi_delivery_data10_runtime10000000_trials1.csv", index_col=False)
+#drawTwoLineGraph(data[data['numTaxis']==2], 'newCustomerProb')
+#drawTwoLineGraph(data[data['numTaxis']==5], 'newCustomerProb')
+#drawTwoLineGraph(data[data['numTaxis']==10], 'newCustomerProb')
+#plt.show()
+
+
+#data = pd.read_csv("mas_taxi_delivery_data9_runtime10000000_trials10.csv", index_col=False)
+#drawTwoLineGraph(data, 'seeRange')
+#plt.show()
+ 
+#data = pd.read_csv("mas_taxi_delivery_data10_runtime10000000_trials1.csv", index_col=False)
+#drawHeatMap(data, 'newCustomerProb', 'numTaxis')
