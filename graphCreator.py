@@ -3,7 +3,10 @@ import pandas as pd
 
 import seaborn.apionly as sns
 import numpy as np
-from backcall._signatures import Parameter
+
+
+def save(filename, param, metric):
+    return plt.savefig("plot_" + filename + "_" + param + "_" + metric + ".png")
 
 
 def ultimateGraphCreator(filename, someParameters, someMetrics):
