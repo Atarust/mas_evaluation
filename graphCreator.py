@@ -12,6 +12,11 @@ def save(filename, param, metric):
 def ultimateGraphCreator(filename, someParameters, someMetrics):
     data = pd.read_csv(filename, index_col=False)
     augmentTicksIdlePercent(data)
+    data['lazyTicks'] = (data['nrOfLazy'] / data['numTaxis']) * data['ticks']
+    data['ticksNonlazyTaxisSpentIdle'] = data['ticksTaxiSpentIdle'] - data['lazyTicks']
+    data['ticksNonlazyTaxisSpentIdlePercent'] = data['ticksNonlazyTaxisSpentIdle'] / (data['ticks'] - data['lazyTicks'])
+    
+    data['passengersDeliveredPerNonlazyTaxi'] = data['passengersDelivered'] / (data['numTaxis'] - data['nrOfLazy'])
     
     parameters = findVariatingParameters(data, someParameters)
     
@@ -25,7 +30,9 @@ def ultimateGraphCreator(filename, someParameters, someMetrics):
         # draw 2 line graph
         for metric in someMetrics:
             drawTwoLineGraph(data, parameters[0], metric)
-            plt.show()
+            save(filename, parameters[0], metric)
+            plt.close()
+            # plt.show()
     elif(len(parameters) == 2):
         # draw heatmap
         for metric in someMetrics:
@@ -36,7 +43,9 @@ def ultimateGraphCreator(filename, someParameters, someMetrics):
         for param in parameters:
             for metric in someMetrics:
                 drawTwoLineGraph(data, param, metric)
-                plt.show()
+                save(filename, param, metric)
+                plt.close()
+                # plt.show()
     
 
 def findVariatingParameters(data, someParameters):
@@ -76,17 +85,22 @@ def drawTwoLineGraph(data, x, y='passengersDelivered'):
     ax.legend(['data[\'commRange\'] > 100', 'data[\'commRange\'] <= 100'])
 
 
-def drawHeatMap(data, x, y, z='passengersDelivered'):
+def drawHeatMap(data, x, y, z='passengersDelivered', name="", filename=""):
     # if there are configurations with same parameters keeping only the mean
     data = data.groupby(['runTime', 'commRange', 'commReliability', 'numTaxis', 'numCustomers', 'newCustomerProb', 'seeRange', 'lazyProb'], as_index=False).mean()
     piv = pd.pivot_table(data, values=z, index=[x], columns=[y], fill_value=0)
     ax = sns.heatmap(piv, square=True)
     plt.setp(ax.xaxis.get_majorticklabels(), rotation=90)
     plt.tight_layout()
-    plt.show()
+    plt.title(z)
+    # plt.savefig("plt_" + filename[-40:] + name + x + y + z + ".png")
+    save(filename, x + '_' + y, z)
+    plt.close()
+   # plt.show()
 
-def plotCommImprove(data, x, y, z='passengersDelivered'):
-    #data = data.groupby(['runTime', 'commRange', 'commReliability', 'numTaxis', 'numCustomers', 'newCustomerProb', 'seeRange', 'lazyProb'], as_index=False).mean()
+
+def plotCommImprove(data, x, y, z='passengersDelivered', filename=""):
+    # data = data.groupby(['runTime', 'commRange', 'commReliability', 'numTaxis', 'numCustomers', 'newCustomerProb', 'seeRange', 'lazyProb'], as_index=False).mean()
     
     dataComm = data[data['commRange'] > 100]
     dataNoComm = data[data['commRange'] <= 100]
@@ -114,7 +128,11 @@ def plotCommImprove(data, x, y, z='passengersDelivered'):
     ax = sns.heatmap(piv, square=True)
     plt.setp(ax.xaxis.get_majorticklabels(), rotation=90)
     plt.tight_layout()
-    plt.show()
+    plt.title(z)
+    save(filename, x + '_' + y, z + '_commImprove')
+    plt.close()
+    # plt.show()
+    
 
 someParameters = ['runTime', 'commReliability', 'numTaxis', 'numCustomers', 'newCustomerProb', 'seeRange', 'lazyProb']
 someMetrics = ['passengersDelivered', 'ticksTaxiSpentIdle', 'ticksBetweenSeenAndPickedAverage', 'ticksIdlePercent']
